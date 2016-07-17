@@ -10,9 +10,10 @@ function getAppInfo(appId, app) {
   return {
     id: appId,
     name: app.name,
-    api_url: app.api_url,
-    app_entrance_url: app.app_entrance_url,
-    subject: app.subject
+    papi_url: app.papi_url,
+    entrance_url: app.entrance_url,
+    subject: app.subject,
+    description: app.description
   };
 }
 

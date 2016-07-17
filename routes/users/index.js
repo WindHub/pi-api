@@ -1,6 +1,7 @@
 var express = require('express');
 var jwt = require('jsonwebtoken');
 var randomstring = require("randomstring");
+var ms = require('ms');
 
 var config = require('../../config');
 
@@ -31,8 +32,23 @@ router.post('/login', function(req, res, next) {
       if(err) throw err;
       res
         .status(200)
-        .cookie('authorization', token, { expires: new Date(exp + Date.now()), httpOnly: true })
-        .json({});
+        .cookie('authorization', token, {
+          httpOnly: true,
+          domain: config.api_url,
+          maxAge: config.jwt.expires,
+          path: '/',
+          secure: config.secure
+        });
+      if(req.body.remember) {
+        res.cookie('remembertoken', "placeholder", {
+          httpOnly: true,
+          domain: config.api_url,
+          maxAge: ms('14 days'),
+          path: '/',
+          secure: config.secure
+        });
+      }
+      res.json({});
     });
   } else {
     res
@@ -44,6 +60,7 @@ router.post('/login', function(req, res, next) {
   }
 });
 
+
 router.post('/me', require('../util/auth-middleware'), function(req, res, next) {
   res
     .status(200)
@@ -54,6 +71,22 @@ router.post('/me', require('../util/auth-middleware'), function(req, res, next) 
       iss: req.auth.iss,
       sub: req.auth.sub
     });
+});
+
+router.post('/logout', require('../util/auth-middleware'), function(req, res, next) {
+  res
+    .status(200)
+    .clearCookie('authorization', {
+      domain: config.api_url,
+      path: '/',
+      secure: config.secure
+    })
+    .clearCookie('remembertoken', {
+      domain: config.api_url,
+      path: '/',
+      secure: config.secure
+    })
+    .json({});
 });
 
 module.exports = router;
