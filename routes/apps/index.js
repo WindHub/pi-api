@@ -35,9 +35,10 @@ router.post('/:id',
         var app = config.apps[req.params.id];
         var payload = {
           pi_user: {
-            userId: 1,
-            grpId: 1,
-            name: "SkyZH"
+            userId: req.auth.user.userId,
+            grpId: req.auth.user.grpId,
+            name: req.auth.user.name,
+            email: req.auth.user.email
           },
           jti: req.auth.jti,
           exp: req.auth.exp
