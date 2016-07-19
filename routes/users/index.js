@@ -1,9 +1,14 @@
-var express = require('express');
-var jwt = require('jsonwebtoken');
-var randomstring = require("randomstring");
-var ms = require('ms');
+const assert = require('assert');
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const randomstring = require("randomstring");
+const ms = require('ms');
+const Step = require('step');
+const bcrypt = require('bcrypt');
 
-var config = require('../../config');
+const config = require('../../config');
+const User = require('../schemas').User;
+const UserValidation = require('../const').Validation.User;
 
 var router = express.Router();
 
@@ -13,23 +18,99 @@ router.get('/', function(req, res, next) {
     .json({});
 });
 
-router.post('/login', function(req, res, next) {
-  if(req.body.username == 'SkyZH' && req.body.password == '123456') {
-    var exp = config.jwt.expires;
-    var payload = {
-      user: {
-        userId: 1,
-        grpId: 1,
-        name: "SkyZH"
+router.post('/', function(req, res, next) {
+  Step(
+    function() {
+      assert(req.body.name, { message: "name required", code: 400.2 });
+      assert(UserValidation.Username.test(req.body.name), { message: "name invaild", code: 400.3 });
+      assert(req.body.password, { message: "password required", code: 400.4 });
+      assert(UserValidation.Password.test(req.body.password), { message: "password invaild", code: 400.5 });
+      assert(req.body.email, { message: "email required", code: 400.6 });
+      assert(UserValidation.Email.test(req.body.email), { message: "email invaild", code: 400.7 });
+      //TODO: CAPTCHA and License Agreement
+      this();
+    },
+    function(err) {
+      if (err) throw err;
+      bcrypt.hash(req.body.password, config.password.saltRounds, this);
+    },
+    function(err, hash) {
+      if (err) throw err;
+      var user = new User({
+        name: req.body.name,
+        email: req.body.email,
+        password: hash,
+        grpId: 1
+      });
+      user.save(this);
+    },
+    function(err, user) {
+      if (err) throw err;
+      res
+        .status(200)
+        .json({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          grpId: user.grpId
+        });
+    },
+    function(err) {
+      if (err) {
+        if (err.name == 'MongoError' && err.code == 11000) {
+          res
+            .status(400)
+            .json({ code: 400.8, message: "duplicate username or email" });
+        } else {
+          res
+            .status(400)
+            .json({ code: err.message.code || 400.1, message: err.message.message || "" });
+        }
       }
-    };
-    jwt.sign(payload, config.jwt.secret, {
-      expiresIn: Math.floor(exp / 1000),
-      issuer: config.jwt.issuer,
-      jwtid: randomstring.generate(16),
-      subject: config.jwt.subject
-    }, function(err, token) {
-      if(err) throw err;
+    }
+  );
+});
+
+router.post('/login', function(req, res, next) {
+  var __user;
+  Step(
+    function() {
+      User.findOne({ $or:[{ 'name': req.body.username }, { 'email': req.body.username }]}, this);
+    },
+    function(err, user) {
+      if (err) throw err;
+      __user = user;
+      bcrypt.compare(req.body.password, user.password, this);
+    },
+    function(err, result) {
+      if (err) throw err;
+      if (result) {
+        var exp = config.jwt.expires;
+        var payload = {
+          user: {
+            userId: __user.id,
+            grpId: __user.grpId,
+            name: __user.name,
+            email: __user.email
+          }
+        };
+        jwt.sign(payload, config.jwt.secret, {
+          expiresIn: Math.floor(exp / 1000),
+          issuer: config.jwt.issuer,
+          jwtid: randomstring.generate(16),
+          subject: config.jwt.subject
+        }, this);
+      } else {
+        res
+          .status(401)
+          .json({
+            code: 401.1,
+            message: "wrong username or password"
+          });
+      }
+    },
+    function(err, token) {
+      if (err) throw err;
       res
         .status(200)
         .cookie('authorization', token, {
@@ -39,7 +120,7 @@ router.post('/login', function(req, res, next) {
           path: '/',
           secure: config.secure
         });
-      if(req.body.remember) {
+      if (req.body.remember) {
         res.cookie('remembertoken', "placeholder", {
           httpOnly: true,
           domain: config.api_url,
@@ -49,15 +130,14 @@ router.post('/login', function(req, res, next) {
         });
       }
       res.json({});
-    });
-  } else {
-    res
-      .status(401)
-      .json({
-        code: 401.1,
-        message: "wrong username or password"
-      });
-  }
+    },
+    function(err) {
+      console.error(err);
+      res
+        .status(500)
+        .json();
+    }
+  );
 });
 
 

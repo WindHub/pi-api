@@ -1,9 +1,10 @@
-var express = require('express');
-var _ = require('lodash');
-var jwt = require('jsonwebtoken');
-var randomstring = require("randomstring");
+const express = require('express');
+const _ = require('lodash');
+const jwt = require('jsonwebtoken');
+const randomstring = require("randomstring");
 
-var config = require('../../config');
+const config = require('../../config');
+
 var router = express.Router();
 
 function getAppInfo(appId, app) {

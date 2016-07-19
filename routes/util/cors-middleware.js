@@ -1,4 +1,4 @@
-var config = require('../../config');
+const config = require('../../config');
 
 module.exports = function(req, res, next) {
   res.header("Access-Control-Allow-Origin", config.url);

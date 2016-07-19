@@ -1,11 +1,11 @@
-var jwt = require('jsonwebtoken');
-var config = require('../../config');
+const jwt = require('jsonwebtoken');
+const config = require('../../config');
 
 module.exports = function(req, res, next) {
-  if(req.cookies.authorization) {
+  if (req.cookies.authorization) {
     jwt.verify(req.cookies.authorization, config.jwt.secret, function(err, decoded) {
-      if(err) {
-        if(err.name == "TokenExpiredError") {
+      if (err) {
+        if (err.name == "TokenExpiredError") {
           res
             .status(401)
             .json({
@@ -21,7 +21,7 @@ module.exports = function(req, res, next) {
             });
         }
       } else {
-        if(decoded.sub != config.jwt.subject || decoded.iss != config.jwt.issuer) {
+        if (decoded.sub != config.jwt.subject || decoded.iss != config.jwt.issuer) {
           res
             .status(401)
             .json({
