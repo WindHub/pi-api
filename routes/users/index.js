@@ -6,6 +6,7 @@ const ms = require('ms');
 const Step = require('step');
 const bcrypt = require('bcrypt');
 
+const redis = require('../services').Redis;
 const config = require('../../config');
 const User = require('../schemas').User;
 const UserValidation = require('../const').Validation.User;
@@ -72,7 +73,7 @@ router.post('/', function(req, res, next) {
 });
 
 router.post('/login', function(req, res, next) {
-  var __user;
+  let __user, __jti, __exp;
   Step(
     function() {
       User.findOne({ $or:[{ 'name': req.body.username }, { 'email': req.body.username }]}, this);
@@ -85,7 +86,7 @@ router.post('/login', function(req, res, next) {
     function(err, result) {
       if (err) throw err;
       if (result) {
-        var exp = config.jwt.expires;
+        __exp = config.jwt.expires;
         var payload = {
           user: {
             userId: __user.id,
@@ -94,10 +95,11 @@ router.post('/login', function(req, res, next) {
             email: __user.email
           }
         };
+        __jti = randomstring.generate(16);
         jwt.sign(payload, config.jwt.secret, {
-          expiresIn: Math.floor(exp / 1000),
+          expiresIn: Math.floor(__exp / 1000),
           issuer: config.jwt.issuer,
-          jwtid: randomstring.generate(16),
+          jwtid: __jti,
           subject: config.jwt.subject
         }, this);
       } else {
@@ -129,13 +131,20 @@ router.post('/login', function(req, res, next) {
           secure: config.secure
         });
       }
-      res.json({});
+      redis.set('auth:' + __jti, 'ok', this);
     },
-    function(err) {
-      console.error(err);
-      res
-        .status(500)
-        .json();
+    function(err, result) {
+      if (err) throw err;
+      if (result !== "") {
+        res.json({});
+      } else {
+        res
+          .status(401)
+          .json({
+            code: 401.8,
+            message: "error while saving to redis"
+          });
+      }
     }
   );
 });
@@ -154,19 +163,26 @@ router.post('/me', require('../util/auth-middleware'), function(req, res, next) 
 });
 
 router.post('/logout', require('../util/auth-middleware'), function(req, res, next) {
-  res
-    .status(200)
-    .clearCookie('authorization', {
-      domain: config.api_url,
-      path: '/',
-      secure: config.secure
-    })
-    .clearCookie('remembertoken', {
-      domain: config.api_url,
-      path: '/',
-      secure: config.secure
-    })
-    .json({});
+  Step(
+    function() {
+      redis.del('auth:' + req.auth.jti, this);
+    },
+    function(err, result) {
+      if (err) throw err;
+      res
+        .status(200)
+        .clearCookie('authorization', {
+          domain: config.api_url,
+          path: '/',
+          secure: config.secure
+        })
+        .clearCookie('remembertoken', {
+          domain: config.api_url,
+          path: '/',
+          secure: config.secure
+        })
+        .json({});
+    }
+  );
 });
-
 module.exports = router;
